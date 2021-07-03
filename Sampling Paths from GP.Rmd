@@ -8,7 +8,7 @@ output: pdf_document
 
 ```{r load packages, include=F}
 #install.packages("MASS")
-#library(MASS)
+library(MASS)
 
 #install.packages('tinytex')
 #library(tinytex)
@@ -133,3 +133,117 @@ for(l in c(0.2, 0.7, 1.5)) {
   str(Y)
 }
 ```
+
+
+
+## Rational quadratic (RQ) kernel
+
+The rational quadratic (RQ) kernel has the form 
+$K(x, x') = \sigma^2 (1 + \frac{||x-x'||^2}{2 \alpha l^2})^{- \alpha}$,
+
+where $\sigma > 0$ and $\alpha > 0$ are hyperparameters. 
+
+Below we create the RQ kernel function and see how length l affects the function drawn:
+```{r}
+rq_kernel <- function(x, y, Sigma = 1, alpha = 1, Length = 1) {
+  Sigma^2 * (1 + (x - y)^2 / (2 * alpha * Length^2))^(-alpha)
+}
+
+par(mfrow = c(1, 3))
+
+for (a in c(0.01, 0.5, 50)) {
+  Y <- draw_samples(x, N, kernel_fn = rq_kernel, alpha = a)
+  
+  plot(range(x), range(Y), xlab = "x", ylab = "y", type = "n",
+       main = paste("RQ kernel, alpha =", a))
+  
+  for(n in 1:N) {
+    lines(x, Y[, n], col = col_list[[n]], lwd = 1.5)
+  }
+  
+}
+
+
+```
+
+
+## Mat${\'e}$rn covariance function
+
+The Mat$\'e$rn covariance function has the form
+
+$K(x, x') = \sigma^2 \frac{1}{2^{v-1} \Gamma(\nu)} (\frac{\sqrt(2\nu) ||x - x'||}{l})^{\nu} K_{\nu} (\frac{\sqrt(2\nu) ||x - x'||}{l})$, 
+
+where 
+
+* $\frac{\sqrt(2\nu)}{l} > 0$: spatial scale paramter, while its inverse is 
+sometimes referred to as a correlation length
+* $\nu > 0$: smooth parameter defines the Hausdorff dimension and the 
+differentiability of the sample paths
+    * if $\nu = p + 1/2, p \in Z$, the Mat${\'e}$rn function reduces to the product of an
+  exponential function and a polynomial $M(\textbf{h}|n+1/2, a) = exp(-a ||\textbf{h}||) \Sigma_{k=0} ^n \frac{(n+k)!}{(2n)!} {n \choose k} (2a ||\textbf{h}||)^{n-k}$, n = 0, 1, ...
+    * the larger the $\nu$, the smoother the process
+    * in practice, $\nu = 1/2$, $\nu = 3/2$ and $\nu = 5/2$ are used more often
+  
+```{r}  
+matern_kernel <- function(x, y, nu = 1.5, Sigma = 1, l = 1) {
+  if(!(nu %in% c(0.5, 1.5, 2.5))) {
+    stop("\nu must be equal to 0.5, 1.5 or 2.5")
+  }
+  
+  p <- nu - 0.5
+  d <- abs(x - y)
+  
+  if (p == 0) {
+    Sigma^2 * exp(- d / l)
+  } else if (p == 1) {
+    Sigma^2 * exp(-sqrt(3) * d / l) * (1 + sqrt(3) * d / l)
+  } else {
+    Sigma^2 * exp(-sqrt(5) * d / l) * (1 + sqrt(5) * d / l + 
+                                         1/3 * (sqrt(5) * d / l)^2)
+  }
+  
+}
+
+
+
+par(mfrow = c(1, 3))
+for (nu in c(0.5, 1.5, 2.5)) {
+  Y <- draw_samples(x, N, kernel_fn = matern_kernel, nu = nu)
+  
+  plot(range(x), range(Y), xlab = "x", ylab = "y", type = "n",
+       main = paste("Matern kernel, nu =", nu * 2, "/ 2"))
+  
+  for (n in 1:N) {
+    lines(x, Y[, n], col = col_list[[n]], lwd = 1.5)
+  }
+  
+}
+```  
+So the $\nu = 1/2$ is too rough for practical use. 
+
+
+
+## Brownian motion
+The most studied object in stochastic processes, is one-dimensional GP with 
+mean zero, covariance function $K(x, x') = min(x, x')$. Its paths are extremely
+rough. 
+```{r}
+bm_kernel <- function(x, y) {
+  pmin(x, y)
+} 
+ 
+Y <- draw_samples(x, N, kernel_fn = bm_kernel)
+
+plot(range(x), range(Y), xlab = "x", ylab = "y", type = "n", 
+     main = "Brownian motion kernel")
+
+for(n in 1:N) {
+  lines(x, Y[, n], col = col_list[[n]], lwd = 1.5)
+}
+```
+
+
+
+
+
+
