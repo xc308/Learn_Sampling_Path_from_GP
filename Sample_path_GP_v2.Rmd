@@ -1,0 +1,140 @@
+---
+title: "Sampling Paths from Gaussian stochastic process"
+author: "XC"
+date: "2022-06-09"
+output: html_notebook
+---
+
+```{r load packages, include=F}
+install.packages("MASS")
+library(MASS)
+
+install.packages('tinytex')
+library(tinytex)
+```
+
+
+## General set-up
+
+* a zero-centered GP(m(.), K(.,.)) 
+* f is a function drawn from this GP
+* a vector (x1, ... xn), the function values (f(x1), ... f(xn)) or (Y)
+* must have a multivariate GP with
+  - mean: (m(x1),..., m(xn))
+  - covariance matrix Sigma with Sigma_{ij}  = K(xi, xj)
+
+* so we could make use of this property (with 2 moments determine the whole distribution), draw this function from GP:
+  1. select a fine grid of x-coords
+  2. use mvrnorm() from MASS to draw function values at these points
+  3. then connect them with straight lines
+  
+  
+  
+## Generate Covariance matrix
+
+Generate Covariance matrix from a known kernel function at points x
+
+```{r}
+cov_matrix <- function(x, kernel_fn, ...) {
+  outer(x, x, function(a, b) kernel_fn(a, b, ...))
+}
+
+```
+
+
+## Sample
+
+Given x-coords, take N draws from the GP with 
+covariance K(.,.) evaluated using kernel_fn at coords x
+
+```{r}
+draw_samples <- function(x, N, kernel_fn, ...) {
+  set.seed(2022-06-09)
+  
+  K <- cov_matrix(x, kernel_fn, ...)
+  
+  Y <- matrix(NA, nrow = length(x), ncol = N)
+  for (n in 1:N) {
+    Y[, n]<- mvrnorm(1, mu = rep(0, length(x)), Sigma = K)
+  }
+  Y
+}
+
+```
+
+
+## Parameters
+
+Use the following parameters for the rest code
+```{r}
+x <- seq(0, 2, length.out = 201)  # 1-d simulation
+
+N <- 3
+
+col_list <- list("red", "blue", "black")
+```
+
+
+## Kernel 1:
+## Squared exponential(SE) kernel
+
+* SE also known as _radial basis furntion (RBF) kernel_ or the _Gaussian kernel_ 
+* has the form:
+$K(x, x') = \sigma^2 exp(- \frac{||x-x'||^2}{2l^2} )$
+$K(x, x') = \sigma^2 exp(- \frac{\| x-x'\|^2}{2l^2}) $
+
+* where $\sigma^2 > 0$ and $l > 0$ are hyperparameters:
+  - $\sigma^2 > 0$ tells how variable the function is overall, and set to 1 for simplicity
+  - $l = 0.2$ 
+  
+* most commonly used kernel as its computational tractability
+
+Now generates 3 draws from the SE kernel
+```{r}
+## generate SE kernel
+SE_kernel <- function(x, y, Sigma = 1, l = 1) {
+  Sigma^2 * exp(- (x - y)^2 / (2 * l^2))
+}
+```
+
+```{r}
+## draw samples from GP that use SE_kernel to construct cov_matrix at coords x
+Y <- draw_samples(x = x, N = N, kernel_fn = SE_kernel, l = 0.2)
+
+```
+
+```{r}
+## plot the sample path
+
+plot(range(x), range(Y), xlab = "x", ylab = "y",
+     type = "n", main = "SE_kernel, l = 0.2")
+
+for (n in 1:N) {
+  lines(x, Y[, n], col = col_list[[n]], lwd = 1.5)
+}
+
+```
+
+
+## Show how changing "length-scale" parmaeter $l$ affects the function drawn
+
+The smaller the $l$, the more wiggly the function drawn
+
+```{r}
+par(mfrow = c(1, 3))
+
+for (l in c(0.2, 0.9, 1.5)) {
+  # draw samples from kernel with different l
+  Y <- draw_samples(x, N, kernel_fn = SE_kernel, l = l)
+  
+  # plot 3 frameworks
+  plot(range(x), range(Y), xlab = "x", ylab = "y", 
+       main = paste0("SE_kernel,", "l = ", l, sep = " "))
+       
+  # plot sample path
+  for (n in 1:N) {
+    lines(x, Y[, n], col = col_list[[n]], lwd = 1.5)
+  }
+  
+}
+```
